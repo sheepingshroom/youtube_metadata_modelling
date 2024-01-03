@@ -1,0 +1,168 @@
+---
+title: "Exploratory Data Analysis"
+author: "Gustav Idun Sloth"
+date: "2023-12-01"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(tidyverse)
+library(corrplot)
+library(lme4)
+library(lmerTest)
+library(forcats)
+library(scales)
+```
+
+## Importing Data
+
+```{r data import}
+
+setwd(".")
+df <- read_csv("data/video_dataset/dataset_10k_lang_5.0.csv")
+df <- df %>%
+  select(title:language) %>%
+  dplyr::filter(language == "en") %>%
+  rename(view_count = viewCount) %>%
+  drop_na(view_count)
+
+nrow(df)
+
+```
+
+
+## Feature Extraction
+
+```{r Feature Extraction}
+
+#number of words
+df <- df %>% mutate(num_words = lengths(strsplit(title, ' ')))
+
+#categories
+df <- df %>% mutate(category_text = as.character(category))
+
+df <- df %>% mutate(category_text = case_when(
+                              category_text == '1' ~ 'Film & Animation',
+                              category_text == '2' ~ 'Autos & Vehicles',
+                              category_text == '10' ~ 'Music',
+                              category_text == '15' ~ 'Pets & Animals',
+                              category_text == '17' ~ 'Sports',
+                              category_text == '18' ~ 'Short Movies',
+                              category_text == '19' ~ 'Travel & Events',
+                              category_text == '20' ~ 'Gaming',
+                              category_text == '21' ~ 'Videoblogging',
+                              category_text == '22' ~ 'People & Blogging',
+                              category_text == '23' ~ 'Comedy',
+                              category_text == '24' ~ 'Entertainment',
+                              category_text == '25' ~ 'News & Politics',
+                              category_text == '26' ~ 'Howto & Style',
+                              category_text == '27' ~ 'Education',
+                              category_text == '28' ~ 'Science & Technology',
+                              category_text == '29' ~ 'Nonprofits & Activism',
+                              category_text == '30' ~ 'Movies',
+                              category_text == '31' ~ 'Anime/Animation',
+                              category_text == '32' ~ 'Action/Adventure',
+                              category_text == '33' ~ 'Classics',
+                              category_text == '34' ~ 'Comedy',
+                              category_text == '35' ~ 'Documentary',
+                              category_text == '36' ~ 'Drama',
+                              category_text == '37' ~ 'Family',
+                              category_text == '38' ~ 'Foreign',
+                              category_text == '39' ~ 'Horror',
+                              category_text == '40' ~ 'Sci-Fi/Fantasy',
+                              category_text == '41' ~ 'Thriller',
+                              category_text == '42' ~ 'Shorts',
+                              category_text == '43' ~ 'Shows',
+                              category_text == '44' ~ 'Trailers'
+                              ))
+
+```
+
+## Category Analysis
+
+```{r categories}
+
+ggplot(df, aes(y = category_text)) +
+  geom_bar() +
+  labs(title = "Category Distribution", y = "Category", x = "Count")
+
+#mean views of categories
+df_category <- group_by(df, category_text) %>% summarise(mean = mean(view_count)) %>% as.data.frame()
+
+ggplot(df_category, aes(y = category_text, x = mean)) +
+  geom_bar(stat = "identity", width=.5, fill="tomato3") +
+  labs(title = "Category Mean Views", x = "Mean Views", y = "Category")
+
+
+```
+
+
+## Correlation Plot
+
+```{r plots}
+
+cor_df <- df %>% select(view_count, subscriber_count, num_words)
+
+M = cor(cor_df, use="pairwise.complete.obs")
+corrplot(M, method = "circle")
+
+model <- lme4::lmer(view_count ~ subscriber_count + (1 | channel_id), data = df)
+
+lmerTest::lmer(view_count ~ subscriber_count + (1 | channel_id), data = df)
+```
+```{r word analysis}
+
+word_view_df <- read_csv("word_avg_view_1.csv")
+
+word_view_df_top <- word_view_df %>% arrange(desc(median_views)) %>% slice_max(median_views, n = 20)
+
+top_words <- ggplot(word_view_df_top, aes(x=reorder(word, -median_views), y = median_views)) + 
+  geom_bar(stat="identity", width=.5, fill="tomato3") + 
+  labs(title="Top 20 words with highest average views", 
+       subtitle="Sampled from 2,000 most common words",
+       x = "Word",
+       y = "Average Views") + 
+  theme(axis.text.x = element_text(angle=65, vjust=0.6)) +
+  scale_y_continuous(labels = label_comma())
+
+ggsave(top_words, 
+       filename = "plots/top_words.png",
+       device = "png",
+       height = 3, width = 5, units = "in")
+
+
+word_median_df <- read_csv("word_median_view.csv")
+
+word_median_df_top <- word_median_df %>% arrange(desc(median_views)) %>% slice_max(median_views, n = 20)
+
+top_words_median <- ggplot(word_median_df_top, aes(x=reorder(word, -median_views), y = median_views)) + 
+  geom_bar(stat="identity", width=.5, fill="tomato3") + 
+  labs(title="Top 20 words with highest median views", 
+       subtitle="Sampled from 2,000 most common words",
+       x = "Word",
+       y = "Median Views") + 
+  theme(axis.text.x = element_text(angle=65, vjust=0.6)) +
+  scale_y_continuous(labels = label_comma())
+
+ggsave(top_words_median, 
+       filename = "plots/top_words_median.png",
+       device = "png",
+       height = 3, width = 5, units = "in")
+
+
+library(wordcloud)
+library(RColorBrewer)
+library(wordcloud2)
+
+set.seed(1234) # for reproducibility 
+wordcloud(words = word_view_df$word, freq = word_view_df$n, min.freq = 1,max.words=200, random.order=FALSE, rot.per=0.35,colors=brewer.pal(8, "Dark2"))
+
+
+# starts with analysis
+bought <- df %>% filter(str_detect(title, "^(?i)I Bought"))
+nrow(bought)
+median(bought$view_count)
+bought_group <- bought %>% group_by(channel_id) %>% summarise() %>% as.data.frame()
+```
+

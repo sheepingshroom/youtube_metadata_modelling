@@ -1,0 +1,18 @@
+.venv
+.venv/
+__pycache__/
+data/
+models/
+api key
+app.log
+cond1
+cond2
+cond3
+records
+plots/
+youtube-video-scraper/api_keys.txt
+channel_analysis.R 
+logging.txt
+.Rhistory
+video_classification_youniverse.Rmd
+.DS_Store
